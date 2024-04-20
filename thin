@@ -1,0 +1,67 @@
+import cv2
+import RPi.GPIO as GPIO
+import time
+
+# Function to initialize servo motors
+def setup_servo(pin):
+    GPIO.setmode(GPIO.BOARD)
+    GPIO.setup(pin, GPIO.OUT)
+    servo = GPIO.PWM(pin, 50)  # PWM with frequency 50Hz
+    servo.start(0)
+    return servo
+
+# Function to move servo to a specific angle
+def move_servo(servo, angle):
+    duty = angle / 18 + 2
+    GPIO.output(servo, True)
+    servo.ChangeDutyCycle(duty)
+    time.sleep(1)
+    GPIO.output(servo, False)
+    servo.ChangeDutyCycle(0)
+
+# Initialize servos
+pan_servo_pin = 11  # Adjust pin numbers according to your setup
+tilt_servo_pin = 13
+pan_servo = setup_servo(pan_servo_pin)
+tilt_servo = setup_servo(tilt_servo_pin)
+
+# Initialize camera
+cap = cv2.VideoCapture(0)
+
+while True:
+    ret, frame = cap.read()
+    if not ret:
+        break
+
+    # Convert frame to grayscale
+    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+    # Perform object detection (You need to replace this part with your object detection algorithm)
+    # Here we're just using a simple face detector for demonstration purposes
+    face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+    faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
+
+    # If faces are detected, track the largest face
+    if len(faces) > 0:
+        largest_face = max(faces, key=lambda x: x[2] * x[3])  # Find the largest face
+        x, y, w, h = largest_face
+
+        # Calculate center of the face
+        center_x = x + w // 2
+        center_y = y + h // 2
+
+        # Calculate angles for pan and tilt servos
+        pan_angle = (center_x / frame.shape[1]) * 180
+        tilt_angle = (center_y / frame.shape[0]) * 180
+
+        # Move servos to track the face
+        move_servo(pan_servo, pan_angle)
+        move_servo(tilt_servo, tilt_angle)
+
+    cv2.imshow('Frame', frame)
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        break
+
+# Release the camera and close all OpenCV windows
+cap.release()
+cv2.destroyAllWindows()
